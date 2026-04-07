@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Zelda Survival - Mobile</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
+body{background:#111;overflow:hidden;font-family:Arial,sans-serif;touch-action:none;color:white;width:100vw;height:100vh;}
+#gc{position:relative;width:100vw;height:100vh;}
+canvas{position:absolute;top:0;left:0;width:100%;height:100%;image-rendering:pixelated;}
+
+#ui-top{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:linear-gradient(rgba(0,0,0,0.7),transparent);pointer-events:none;z-index:5;}
+#hearts{font-size:clamp(1.2rem,5vw,1.6rem);letter-spacing:2px;}
+#timer{font-size:clamp(1rem,4vw,1.3rem);font-weight:bold;text-shadow:2px 2px #000;background:rgba(0,0,0,0.4);padding:4px 10px;border-radius:20px;}
+#btn-pause{position:absolute;top:10px;right:14px;width:44px;height:44px;background:rgba(0,0,0,0.5);border:2px solid rgba(255,255,255,0.4);color:white;border-radius:10px;display:flex;justify-content:center;align-items:center;z-index:10;font-size:1.2rem;cursor:pointer;pointer-events:auto;}
+
+.overlay{position:absolute;inset:0;background:rgba(0,0,0,0.88);display:none;flex-direction:column;justify-content:center;align-items:center;z-index:100;text-align:center;padding:20px;}
+.overlay h1{font-size:clamp(2rem,8vw,3.5rem);margin-bottom:16px;text-transform:uppercase;letter-spacing:2px;}
+.overlay p{font-size:clamp(1rem,4vw,1.3rem);color:#ddd;margin-bottom:28px;}
+.overlay button{padding:16px 44px;font-size:clamp(1.2rem,5vw,1.5rem);background:#4ade80;border:none;border-radius:12px;cursor:pointer;color:black;font-weight:bold;}
+.overlay button:active{transform:scale(0.96);}
+
+#controls{position:absolute;bottom:0;left:0;right:0;height:220px;pointer-events:none;z-index:5;}
+#dpad{position:absolute;bottom:20px;left:16px;display:grid;grid-template-columns:repeat(3,70px);grid-template-rows:repeat(3,70px);gap:6px;}
+.btn{background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.28);color:white;display:flex;justify-content:center;align-items:center;border-radius:14px;pointer-events:auto;font-size:1.5rem;cursor:pointer;}
+.btn:active{background:rgba(255,255,255,0.28);}
+.center-btn{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:50%;}
+
+#action-btns{position:absolute;bottom:20px;right:16px;display:flex;flex-direction:column;gap:14px;align-items:flex-end;}
+.btn-act{width:88px;height:88px;border-radius:50%;pointer-events:auto;border:3px solid;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-weight:bold;font-size:1.5rem;}
+.btn-label{font-size:0.68rem;font-weight:normal;letter-spacing:1px;opacity:0.85;}
+.btn-atq{background:rgba(239,68,68,0.22);border-color:#ef4444;color:#fca5a5;}
+.btn-def{background:rgba(59,130,246,0.22);border-color:#3b82f6;color:#93c5fd;}
+.btn-act:active{transform:scale(0.9);}
+
+#mini-map{position:absolute;top:60px;right:14px;width:80px;height:80px;opacity:0.75;border:1px solid rgba(255,255,255,0.3);border-radius:4px;z-index:5;}
+
+#enemy-count{position:absolute;top:60px;left:14px;font-size:0.85rem;background:rgba(0,0,0,0.45);padding:4px 10px;border-radius:16px;z-index:5;pointer-events:none;}
+</style>
+</head>
+<body>
+<div id="gc">
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="ui-top">
+    <div id="hearts">❤️❤️❤️❤️❤️</div>
+    <div id="timer">00:00</div>
+  </div>
+
+  <div id="btn-pause">⏸</div>
+  <canvas id="mini-map" width="80" height="80"></canvas>
+  <div id="enemy-count">👾 0</div>
+
+  <div id="pause-screen" class="overlay">
+    <h1 style="color:white;">PAUSA</h1>
+    <p style="color:#aaa;margin-bottom:24px;">El juego está pausado</p>
+    <button onclick="togglePause()">▶ REANUDAR</button>
+  </div>
+
+  <div id="gameover-screen" class="overlay">
+    <h1 style="color:#ef4444;">GAME OVER</h1>
+    <p id="final-score"></p>
+    <button onclick="location.reload()">↺ REINTENTAR</button>
+  </div>
+
+  <div id="controls">
+    <div id="dpad">
+      <div></div>
+      <div class="btn" id="btn-W">↑</div>
+      <div></div>
+      <div class="btn" id="btn-A">←</div>
+      <div class="btn center-btn"></div>
+      <div class="btn" id="btn-D">→</div>
+      <div></div>
+      <div class="btn" id="btn-S">↓</div>
+      <div></div>
+    </div>
+
+    <div id="action-btns">
+      <div class="btn-act btn-atq" id="btn-K">
+        <span>⚔️</span>
+        <span class="btn-label">ATQ</span>
+      </div>
+      <div class="btn-act btn-def" id="btn-J">
+        <span>🛡</span>
+        <span class="btn-label">DEF</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const miniCanvas = document.getElementById('mini-map');
+const mCtx = miniCanvas.getContext('2d');
+const WORLD = 2000;
+let isPaused = false, isGameOver = false;
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize);
+resize();
+
+const player = { x:1000, y:1000, w:32, h:32, hp:20, dir:'down', inv:0, speed:4.5, isAttacking:false, atkT:0, atkDuration:14, isBlocking:false };
+let enemies=[], bombs=[], obstacles=[], projectiles=[], explosions=[];
+let startTime=Date.now(), pauseStart=0, totalPaused=0, lastSpawn=0;
+
+for(let i=0;i<45;i++){
+  obstacles.push({
+    x: Math.random()*(WORLD-120)+60,
+    y: Math.random()*(WORLD-120)+60,
+    w: 60+Math.random()*70,
+    h: 60+Math.random()*70,
+    color: Math.random()>0.4?'#1b4332':'#3d3d3d'
+  });
+}
+
+function checkColl(a,b){ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y; }
+function canMove(x,y,w,h){
+  if(x<15||x+w>WORLD-15||y<15||y+h>WORLD-15) return false;
+  for(let o of obstacles){ if(checkColl({x,y,w,h},o)) return false; }
+  return true;
+}
+
+const activeKeys = {};
+function setupBtn(id, key){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('pointerdown', e=>{ e.preventDefault(); e.stopPropagation(); activeKeys[key]=true; });
+  el.addEventListener('pointerup',   e=>{ e.preventDefault(); activeKeys[key]=false; });
+  el.addEventListener('pointercancel',e=>{ activeKeys[key]=false; });
+  el.addEventListener('touchstart', e=>e.preventDefault(), {passive:false});
+}
+['W','A','S','D','J','K'].forEach(k => setupBtn('btn-'+k, 'Key'+k));
+window.addEventListener('keydown', e=>{ activeKeys[e.code]=true; });
+window.addEventListener('keyup',   e=>{ activeKeys[e.code]=false; });
+document.getElementById('btn-pause').onclick = togglePause;
+
+function togglePause(){
+  if(isGameOver) return;
+  isPaused = !isPaused;
+  document.getElementById('pause-screen').style.display = isPaused ? 'flex' : 'none';
+  if(isPaused) pauseStart = Date.now();
+  else totalPaused += (Date.now() - pauseStart);
+}
+
+function update(){
+  if(isPaused || isGameOver) return;
+  const now = Date.now();
+  const elapsed = Math.floor((now - startTime - totalPaused) / 1000);
+  document.getElementById('timer').innerText =
+    String(Math.floor(elapsed/60)).padStart(2,'0') + ':' + String(elapsed%60).padStart(2,'0');
+
+  const spawnInterval = Math.max(400, 1600 - elapsed * 12);
+  if(now - lastSpawn > spawnInterval){
+    const ang = Math.random() * Math.PI * 2;
+    const dist = 500 + Math.random() * 200;
+    let ex = Math.max(50, Math.min(WORLD-50, player.x + Math.cos(ang)*dist));
+    let ey = Math.max(50, Math.min(WORLD-50, player.y + Math.sin(ang)*dist));
+    enemies.push({ x:ex, y:ey, w:30, h:30, type:Math.random()>0.78?'shooter':'chaser', lastS:0 });
+    if(Math.random()>0.6)
+      bombs.push({ x:Math.random()*(WORLD-60)+30, y:Math.random()*(WORLD-60)+30, w:26, h:26, timer:-1 });
+    lastSpawn = now;
+  }
+
+  player.isBlocking = !!activeKeys['KeyJ'];
+  if(player.inv > 0) player.inv--;
+
+  if(activeKeys['KeyK'] && !player.isAttacking && !player.isBlocking){
+    player.isAttacking = true; player.atkT = player.atkDuration;
+  }
+  if(player.atkT > 0){
+    player.atkT--;
+    if(player.atkT < player.atkDuration*0.8 && player.atkT > player.atkDuration*0.2){
+      const sArea = {x:player.x-25, y:player.y-25, w:82, h:82};
+      enemies = enemies.filter(en => !checkColl(sArea, en));
+      bombs.forEach(b=>{ if(checkColl(sArea,b) && b.timer===-1) b.timer=50; });
+    }
+  } else { player.isAttacking = false; }
+
+  if(!player.isBlocking && !player.isAttacking){
+    let nx=player.x, ny=player.y;
+    if(activeKeys['KeyW']) ny -= player.speed;
+    if(activeKeys['KeyS']) ny += player.speed;
+    if(activeKeys['KeyA']) nx -= player.speed;
+    if(activeKeys['KeyD']) nx += player.speed;
+    if(canMove(nx, player.y, player.w, player.h)) player.x = nx;
+    if(canMove(player.x, ny, player.w, player.h)) player.y = ny;
+    if(activeKeys['KeyW']) player.dir='up';
+    else if(activeKeys['KeyS']) player.dir='down';
+    if(activeKeys['KeyA']) player.dir='left';
+    else if(activeKeys['KeyD']) player.dir='right';
+  }
+
+  enemies = enemies.filter(en=>{
+    const dx=player.x-en.x, dy=player.y-en.y;
+    const dist = Math.hypot(dx,dy);
+    if(dist > 1600) return false;
+    if(en.type==='chaser'){
+      let vx=(dx/dist)*2.6, vy=(dy/dist)*2.6;
+      if(canMove(en.x+vx, en.y, en.w, en.h)) en.x += vx;
+      if(canMove(en.x, en.y+vy, en.w, en.h)) en.y += vy;
+    } else if(now - en.lastS > 2200 && dist < 700){
+      const a = Math.atan2(dy, dx);
+      projectiles.push({x:en.x+15, y:en.y+15, vx:Math.cos(a)*6, vy:Math.sin(a)*6});
+      en.lastS = now;
+    }
+    if(checkColl(player, en) && player.inv<=0 && !player.isBlocking){ player.hp--; player.inv=45; }
+    return true;
+  });
+
+  bombs = bombs.filter(b=>{
+    if(b.timer > 0) b.timer--;
+    if(b.timer === 0){ explosions.push({x:b.x+13, y:b.y+13, r:0, maxR:130}); return false; }
+    return true;
+  });
+  explosions = explosions.filter(ex=>{
+    ex.r += 10;
+    if(Math.hypot((player.x+16)-ex.x,(player.y+16)-ex.y) < ex.r && player.inv<=0 && !player.isBlocking)
+      { player.hp -= 4; player.inv = 55; }
+    enemies = enemies.filter(en => Math.hypot((en.x+15)-ex.x,(en.y+15)-ex.y) > ex.r);
+    return ex.r < ex.maxR;
+  });
+  projectiles = projectiles.filter(p=>{
+    p.x += p.vx; p.y += p.vy;
+    if(checkColl({x:p.x,y:p.y,w:10,h:10}, player)){
+      if(!player.isBlocking && player.inv<=0){ player.hp--; player.inv=35; }
+      return false;
+    }
+    return p.x>0 && p.x<WORLD && p.y>0 && p.y<WORLD;
+  });
+
+  let hStr='';
+  for(let i=0;i<5;i++) hStr += player.hp > i*4 ? (player.hp >= (i+1)*4 ? '❤️' : '🧡') : '🖤';
+  document.getElementById('hearts').innerText = hStr;
+  document.getElementById('enemy-count').innerText = '👾 ' + enemies.length;
+
+  if(player.hp <= 0 && !isGameOver){
+    isGameOver = true;
+    document.getElementById('gameover-screen').style.display = 'flex';
+    document.getElementById('final-score').innerText = 'Sobreviviste ' + elapsed + ' segundos';
+  }
+}
+
+function drawSword(){
+  if(!player.isAttacking) return;
+  const prog = (player.atkDuration - player.atkT) / player.atkDuration;
+  const arc = Math.PI * 1.2, start = -arc/2, cur = start + arc*prog;
+  ctx.save();
+  ctx.translate(player.x+player.w/2, player.y+player.h/2);
+  if(player.dir==='up') ctx.rotate(-Math.PI/2);
+  else if(player.dir==='down') ctx.rotate(Math.PI/2);
+  else if(player.dir==='left') ctx.rotate(Math.PI);
+  ctx.rotate(cur);
+  ctx.fillStyle='#e0e0e0'; ctx.fillRect(20,-4,35,8);
+  ctx.fillStyle='#fff';    ctx.fillRect(25,-2,25,4);
+  ctx.fillStyle='#8b4513'; ctx.fillRect(12,-6,8,12);
+  ctx.fillStyle='rgba(255,255,255,0.2)';
+  ctx.beginPath(); ctx.moveTo(15,0); ctx.arc(0,0,50,start,cur,false); ctx.lineTo(0,0); ctx.fill();
+  ctx.restore();
+}
+
+function drawShield(){
+  if(!player.isBlocking) return;
+  ctx.save();
+  ctx.translate(player.x+player.w/2, player.y+player.h/2);
+  if(player.dir==='up') ctx.rotate(-Math.PI/2);
+  else if(player.dir==='down') ctx.rotate(Math.PI/2);
+  else if(player.dir==='left') ctx.rotate(Math.PI);
+  ctx.fillStyle='#1e3a8a'; ctx.strokeStyle='#93c5fd'; ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(22,-15); ctx.lineTo(32,-10); ctx.lineTo(32,10); ctx.lineTo(22,15);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
+function drawMiniMap(){
+  const s = 80/WORLD;
+  mCtx.fillStyle='rgba(0,30,0,0.88)'; mCtx.fillRect(0,0,80,80);
+  mCtx.fillStyle='#1b4332';
+  obstacles.forEach(o => mCtx.fillRect(o.x*s, o.y*s, Math.max(2,o.w*s), Math.max(2,o.h*s)));
+  mCtx.fillStyle='#dc2626';
+  enemies.forEach(en => mCtx.fillRect(en.x*s-1, en.y*s-1, 3, 3));
+  mCtx.fillStyle='#facc15';
+  bombs.forEach(b => mCtx.fillRect(b.x*s, b.y*s, 2, 2));
+  mCtx.fillStyle='#22c55e';
+  mCtx.fillRect(player.x*s-2, player.y*s-2, 5, 5);
+  mCtx.strokeStyle='rgba(255,255,255,0.15)'; mCtx.lineWidth=1;
+  mCtx.strokeRect(0,0,80,80);
+}
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const camX = Math.max(0, Math.min(player.x - canvas.width/2,  WORLD - canvas.width));
+  const camY = Math.max(0, Math.min(player.y - canvas.height/2, WORLD - canvas.height));
+  ctx.save();
+  ctx.translate(-camX, -camY);
+
+  // Fondo grilla
+  ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=1;
+  for(let i=0;i<WORLD;i+=100){
+    ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,WORLD); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(WORLD,i); ctx.stroke();
+  }
+
+  // Bordes del mundo
+  ctx.fillStyle='#222';
+  ctx.fillRect(0,0,WORLD,15); ctx.fillRect(0,WORLD-15,WORLD,15);
+  ctx.fillRect(0,0,15,WORLD); ctx.fillRect(WORLD-15,0,15,WORLD);
+
+  // Obstáculos
+  obstacles.forEach(o=>{
+    ctx.fillStyle=o.color; ctx.fillRect(o.x,o.y,o.w,o.h);
+    ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=1; ctx.strokeRect(o.x,o.y,o.w,o.h);
+  });
+
+  // Bombas
+  bombs.forEach(b=>{
+    const flash = b.timer > 0 && b.timer%8 < 4;
+    ctx.fillStyle = flash ? '#fff' : '#f97316';
+    ctx.fillRect(b.x,b.y,b.w,b.h);
+    ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=1.5; ctx.strokeRect(b.x,b.y,b.w,b.h);
+  });
+
+  // Explosiones
+  explosions.forEach(ex=>{
+    const gr = ctx.createRadialGradient(ex.x,ex.y,8,ex.x,ex.y,ex.r);
+    gr.addColorStop(0,'rgba(255,200,50,0.75)'); gr.addColorStop(1,'rgba(255,50,0,0)');
+    ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(ex.x,ex.y,ex.r,0,Math.PI*2); ctx.fill();
+  });
+
+  // Enemigos
+  enemies.forEach(en=>{
+    ctx.fillStyle = en.type==='shooter' ? '#7e22ce' : '#dc2626';
+    ctx.fillRect(en.x,en.y,en.w,en.h);
+    ctx.fillStyle='#111';
+    ctx.fillRect(en.x+6, en.y+7, 5,5);
+    ctx.fillRect(en.x+19,en.y+7, 5,5);
+    if(en.type==='shooter'){ ctx.fillStyle='#a855f7'; ctx.fillRect(en.x+11,en.y+16,8,4); }
+  });
+
+  // Proyectiles
+  ctx.fillStyle='#fbbf24';
+  projectiles.forEach(p => ctx.fillRect(p.x,p.y,10,10));
+
+  // Jugador
+  if(player.inv%6 < 3){
+    if(player.dir==='up') drawSword();
+    ctx.fillStyle='#166534'; ctx.fillRect(player.x,player.y,player.w,player.h);
+    ctx.fillStyle='#f59e0b'; ctx.fillRect(player.x+4,player.y-4,player.w-8,10);
+    ctx.fillStyle='#ffdbac';
+    if(player.dir==='down')  ctx.fillRect(player.x+6, player.y+6, player.w-12, 12);
+    else if(player.dir==='left')  ctx.fillRect(player.x,             player.y+6, 8, 12);
+    else if(player.dir==='right') ctx.fillRect(player.x+player.w-8,  player.y+6, 8, 12);
+    if(player.dir!=='up') drawSword();
+    drawShield();
+  }
+
+  ctx.restore();
+  drawMiniMap();
+  update();
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>
